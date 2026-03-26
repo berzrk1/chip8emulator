@@ -18,8 +18,9 @@ struct Chip8 {
     uint8_t sound_timer;
 };
 
-void initialize(chip8 *chip) {
+chip8 *initialize() {
     // Initialize registers and memory once
+    chip8 *chip = malloc(sizeof(chip8));
     chip->memory = calloc(4096, sizeof(uint8_t));
     chip->PC = 0x200;                            // Program starts at 0x200
     chip->opcode = 0;                            // Reset current opcode
@@ -28,9 +29,11 @@ void initialize(chip8 *chip) {
     memset(chip->stack, 0, sizeof(chip->stack)); // Clear stack
     memset(chip->gfx, 0, sizeof(chip->gfx));     // Clear display
     memset(chip->V, 0, sizeof(chip->V));         // Clear registers
+    printf("Chip8 initialized");
 
     // TODO: Load fonts
     // TODO: Reset timers
+    return chip;
 }
 
 int load_game(chip8 *chip, char *gamefile) {
@@ -56,12 +59,14 @@ int load_game(chip8 *chip, char *gamefile) {
         return -1;
     }
 
+    printf("ROM loaded");
     return 0;
 }
 
 void cleanup(chip8 *chip) {
     // Clean up
     free(chip->memory);
+    free(chip);
 }
 
 void emulateCycle(chip8 *chip) {

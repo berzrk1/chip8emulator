@@ -3,8 +3,9 @@
 
 typedef struct Chip8 chip8;
 
-void initialize(chip8 *chip);
+chip8 *initialize();
 void cleanup(chip8 *chip);
+int load_game(chip8 *chip, char *gamefile);
 void emulateCycle(chip8 *chip);
 
 #endif // !CHIP8_H
