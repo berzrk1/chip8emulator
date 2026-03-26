@@ -28,6 +28,9 @@ void initialize(chip8 *chip) {
     memset(chip->stack, 0, sizeof(chip->stack)); // Clear stack
     memset(chip->gfx, 0, sizeof(chip->gfx));     // Clear display
     memset(chip->V, 0, sizeof(chip->V));         // Clear registers
+
+    // TODO: Load fonts
+    // TODO: Reset timers
 }
 
 int load_game(chip8 *chip, char *gamefile) {
@@ -63,7 +66,34 @@ void cleanup(chip8 *chip) {
 
 void emulateCycle(chip8 *chip) {
     // Simulate one cycle of the Chip 8
-    // 1.Fetch Opcode
-    // 2.Decode Opcode
-    // 3.Excute Opcode
+
+    // Fetch Opcode
+    // Since opcode is 2 bytes long, we need to
+    // fetch two successive bytes and merge them
+    chip->opcode =
+        (uint16_t)(chip->memory[chip->PC] << 8 | chip->memory[chip->PC + 1]);
+
+    // Decode Opcode
+    // Read the first byte to get the opcode
+    switch (chip->opcode & 0xF000) {
+        // TODO: Implement opcodes
+
+    case 0xA000: // ANNN: Sets I to the address NNN
+        chip->I = chip->opcode & 0x0FFF;
+        chip->PC += 2; // Skip 2 since we read 2 memory address
+        break;
+
+    default:
+        printf("Unknown opcode: 0x%X\n", chip->opcode);
+    }
+
+    if (chip->delay_timer > 0)
+        chip->delay_timer--;
+
+    if (chip->sound_timer > 0) {
+        if (chip->sound_timer == 1) {
+            printf("BEEP\n");
+        }
+        chip->sound_timer--;
+    }
 }
