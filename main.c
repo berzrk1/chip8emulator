@@ -61,7 +61,7 @@ int main(int argc, char **argv) {
 
         drawGrapics(chip, renderer);
         SDL_RenderPresent(renderer);
-        SDL_Delay(160);
+        SDL_Delay(16);
     }
 
     cleanup(chip);

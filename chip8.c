@@ -129,6 +129,7 @@ void emulateCycle(chip8 *chip) {
             of the stack, then subtracts 1 from the stack pointer.
              */
             chip->PC = chip->stack[chip->sp--];
+            chip->PC += 2;
             printf("Opcode (0x%X) called\n", chip->opcode);
             break;
 
@@ -340,7 +341,7 @@ void emulateCycle(chip8 *chip) {
             otherwise to 0. Then Vx is multiplied by 2.
             */
             uint8_t x = (chip->opcode & 0x0F00) >> 8;
-            chip->V[0xF] = (chip->V[x] & 0x80); // MSB
+            chip->V[0xF] = (chip->V[x] & 0x80) ? 1 : 0; // MSB
             chip->V[x] <<= 1;
             printf("Opcode (0x%X) called\n", chip->opcode);
             chip->PC += 2;
@@ -458,12 +459,25 @@ void emulateCycle(chip8 *chip) {
             break;
 
         case 0x000A: // FX0A
-            while (true) {
-                // TODO: Block all operations, except delay and sound timers
-                printf("waiting for keypress");
+            /* Wait for a key press, store the value of the key in Vx.
+
+            All execution stops until a key is pressed, then the value of that
+            key is stored in Vx.
+             */
+            uint8_t x = (chip->opcode & 0x0F00) >> 8;
+            bool key_pressed = false;
+            for (uint8_t i = 0; i < 0xF; i++) {
+                if (chip->key[i]) {
+                    chip->V[x] = i;
+                    key_pressed = true;
+                    break;
+                }
             }
-            printf("Opcode (0x%X) not implemented yet\n", chip->opcode);
-            chip->PC += 2;
+
+            // Only advance code when a key is pressed
+            if (key_pressed)
+                chip->PC += 2;
+            printf("Opcode (0x%X) called\n", chip->opcode);
             break;
 
         case 0x0015: // FX15
