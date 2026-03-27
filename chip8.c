@@ -465,7 +465,7 @@ void emulateCycle(chip8 *chip) {
              */
             uint8_t x = (chip->opcode & 0x0F00) >> 8;
             bool key_pressed = false;
-            for (uint8_t i = 0; i < 0xF; i++) {
+            for (uint8_t i = 0; i <= 0xF; i++) {
                 if (chip->key[i]) {
                     chip->V[x] = i;
                     key_pressed = true;
