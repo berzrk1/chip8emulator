@@ -564,21 +564,18 @@ void updateTimers(chip8 *chip) {
 }
 
 void drawGrapics(chip8 *chip, SDL_Renderer *renderer) {
-    if (chip->draw_flag) {
-        float scaleX = 800 / 64.0f;
-        float scaleY = 600 / 32.0f;
-        SDL_SetRenderDrawColor(renderer, 25, 25, 25, 255);
-        SDL_RenderClear(renderer);
-        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-        for (int i = 0; i < 64 * 32; i++) {
-            if (chip->gfx[i]) {
-                int col = i % 64;
-                int row = i / 64;
-                SDL_FRect rect = {col * scaleX, row * scaleY, scaleX, scaleY};
-                SDL_RenderFillRect(renderer, &rect);
-            }
+    float scaleX = 800 / 64.0f;
+    float scaleY = 600 / 32.0f;
+    SDL_SetRenderDrawColor(renderer, 25, 25, 25, 255);
+    SDL_RenderClear(renderer);
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    for (int i = 0; i < 64 * 32; i++) {
+        if (chip->gfx[i]) {
+            int col = i % 64;
+            int row = i / 64;
+            SDL_FRect rect = {col * scaleX, row * scaleY, scaleX, scaleY};
+            SDL_RenderFillRect(renderer, &rect);
         }
-        chip->draw_flag = 0;
     }
 }
 
