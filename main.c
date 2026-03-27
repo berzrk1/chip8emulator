@@ -22,6 +22,7 @@ int main(int argc, char **argv) {
         emulateCycle(chip);
         sleep(1);
         // 2. Update screen, if draw flag is set
+        drawGrapics(chip);
         // 3. Store key press state
     }
     cleanup(chip);

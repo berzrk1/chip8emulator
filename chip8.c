@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 struct Chip8 {
     uint8_t *memory;    // addresses
@@ -13,6 +14,7 @@ struct Chip8 {
     uint16_t stack[16]; // stack
     uint8_t sp;         // stack pointer
     bool gfx[64 * 32];  // display
+    bool draw_flag;     // flag when the display needs redraw
     uint16_t opcode;
     uint8_t delay_timer;
     uint8_t sound_timer;
@@ -31,6 +33,7 @@ chip8 *initialize() {
     memset(chip->V, 0, sizeof(chip->V));         // Clear registers
     printf("Chip8 initialized\n");
 
+    srand(time(NULL));
     // TODO: Load fonts
     // TODO: Reset timers
     return chip;
@@ -59,7 +62,7 @@ int load_game(chip8 *chip, char *gamefile) {
         return -1;
     }
 
-    printf("ROM loaded");
+    printf("ROM loaded\n");
     return 0;
 }
 
@@ -86,14 +89,14 @@ void emulateCycle(chip8 *chip) {
     // Decode Opcode
     // Read the first byte to get the opcode
     switch (chip->opcode & 0xF000) {
-        // TODO: Implement opcodes (16/35)
+        // TODO: Implement opcodes (24/35)
 
     case 0x0000:
         switch (chip->opcode & 0x000F) {
         case 0x0000: // 00E0: Clear the display
-            printf("Opcode (0x%X) called\n", chip->opcode);
             display_clear(chip);
             chip->PC += 2;
+            printf("Opcode (0x%X) called\n", chip->opcode);
             break;
 
         case 0x000E: // 00EE: Returns from a subroutine
@@ -322,31 +325,73 @@ void emulateCycle(chip8 *chip) {
         }
         break;
 
-    case 0x9000: // 9XY0: Skips the next instruction if VX does not equal VY
-        printf("Opcode (0x%X) not implemented yet\n", chip->opcode);
-        chip->PC += 2;
+    case 0x9000: { // 9XY0: Skips the next instruction if VX does not equal VY
+        uint8_t x = (chip->opcode & 0x0F00) >> 8;
+        uint8_t y = (chip->opcode & 0x00F0) >> 4;
+        if (chip->V[x] != chip->V[y])
+            chip->PC += 2;
+        printf("Opcode (0x%X) called\n", chip->opcode);
         break;
-
+    }
     case 0xA000: // ANNN: Sets I to the address NNN
         chip->I = chip->opcode & 0x0FFF;
         chip->PC += 2; // Skip 2 since we read 2 memory address
+        printf("Opcode (0x%X) called\n", chip->opcode);
         break;
 
     case 0xB000: // BNNN: Jumps to the address NNN plus V0
-        printf("Opcode (0x%X) not implemented yet\n", chip->opcode);
-        chip->PC += 2;
+        chip->PC = chip->opcode & 0x0FFF + chip->V[0x0];
+        printf("Opcode (0x%X) called\n", chip->opcode);
         break;
 
-    case 0xC000: // CXNN:
-        printf("Opcode (0x%X) not implemented yet\n", chip->opcode);
-        chip->PC += 2;
-        break;
+    case 0xC000: { // Cxkk:
+        /* Set Vx = random byte AND kk.
 
-    case 0xD000:
-        printf("Opcode (0x%X) not implemented yet\n", chip->opcode);
-        chip->PC += 2;
-        break;
+        The interpreter generates a random number from 0 to 255, which is then
+        ANDed with the value kk. The results are stored in Vx.
+        */
+        uint8_t rnd = (uint8_t)rand() % 255;
 
+        uint8_t x = (chip->opcode & 0x0F00) >> 8;
+        uint8_t kk = (chip->opcode & 0x00FF);
+        chip->V[x] = rnd & kk;
+        chip->PC += 2;
+        printf("Opcode (0x%X) called\n", chip->opcode);
+        break;
+    }
+    case 0xD000: { // Dxyn:
+        /* Sprites are 8 pixels wide and have between 1-15 pixels height (N)
+         * Sprites start at I location
+         * If there is a collision, VF is set to 1
+         * Draw to V[x] and V[y]
+         */
+
+        uint8_t x = (chip->opcode & 0x0F00) >> 8;
+        uint8_t y = (chip->opcode & 0x00F0) >> 4;
+        uint8_t height = (chip->opcode & 0x000F); // n
+        uint8_t sprite_byte; // 1 byte, since each sprite is 8 pixels wide
+        chip->V[0xF] = 0;
+
+        // Iterate through each row of the sprite
+        for (int row = 0; row < height; row++) {
+            sprite_byte = chip->memory[chip->I + row]; // All width bits
+            for (int col = 0; col < 8; col++) {
+                if (sprite_byte >> (7 - col) & 1) { // Check if bit is 1
+                    int index = ((chip->V[y] + row) % 32) * 64 +
+                                ((chip->V[x] + col) % 64);
+                    // Check if the bit on the display is already set
+                    if (chip->gfx[index]) {
+                        chip->V[0xF] = 1;
+                    }
+                    chip->gfx[index] ^= 1; // We know the bit is 1
+                }
+            }
+        }
+        chip->draw_flag = 1;
+        chip->PC += 2;
+        printf("Opcode (0x%X) called\n", chip->opcode);
+        break;
+    }
     case 0xE000:
         switch (chip->opcode & 0x000F) {
         case 0x000E: // EX9E
@@ -432,5 +477,12 @@ void emulateCycle(chip8 *chip) {
             printf("BEEP\n");
         }
         chip->sound_timer--;
+    }
+}
+
+void drawGrapics(chip8 *chip) {
+    if (chip->draw_flag) {
+        // update screen
+        chip->draw_flag = 0;
     }
 }

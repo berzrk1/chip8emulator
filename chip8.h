@@ -7,5 +7,6 @@ chip8 *initialize();
 void cleanup(chip8 *chip);
 int load_game(chip8 *chip, char *gamefile);
 void emulateCycle(chip8 *chip);
+void drawGrapics(chip8 *chip);
 
 #endif // !CHIP8_H
