@@ -1,4 +1,7 @@
 #include "chip8.h"
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_keycode.h>
+#include <SDL3/SDL_render.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -15,6 +18,7 @@ struct Chip8 {
     uint8_t sp;         // stack pointer
     bool gfx[64 * 32];  // display
     bool draw_flag;     // flag when the display needs redraw
+    uint8_t key[16];    // keyboard key state
     uint16_t opcode;
     uint8_t delay_timer;
     uint8_t sound_timer;
@@ -31,6 +35,7 @@ chip8 *initialize() {
     memset(chip->stack, 0, sizeof(chip->stack)); // Clear stack
     memset(chip->gfx, 0, sizeof(chip->gfx));     // Clear display
     memset(chip->V, 0, sizeof(chip->V));         // Clear registers
+    memset(chip->key, 0, sizeof(chip->key));     // Clear keys state
     printf("Chip8 initialized\n");
 
     srand(time(NULL));
@@ -104,7 +109,7 @@ void emulateCycle(chip8 *chip) {
             The interpreter sets the program counter to the address at the top
             of the stack, then subtracts 1 from the stack pointer.
              */
-            chip->PC = chip->sp--;
+            chip->PC = chip->stack[chip->sp--];
             printf("Opcode (0x%X) called\n", chip->opcode);
             break;
 
@@ -163,7 +168,7 @@ void emulateCycle(chip8 *chip) {
         equal, increments the program counter by 2
          */
         uint8_t x = (chip->opcode & 0x0F00) >> 8;
-        uint8_t y = chip->V[(chip->opcode & 0x00F0) >> 4];
+        uint8_t y = (chip->opcode & 0x00F0) >> 4;
         if (chip->V[x] == chip->V[y])
             chip->PC += 2;
         printf("Opcode (0x%X) called\n", chip->opcode);
@@ -300,8 +305,8 @@ void emulateCycle(chip8 *chip) {
              */
             uint8_t x = (chip->opcode & 0x0F00) >> 8;
             uint8_t y = (chip->opcode & 0x00F0) >> 4;
-            chip->V[x] = chip->V[y] - chip->V[x];
             chip->V[0xF] = (chip->V[y] > chip->V[x]) ? 1 : 0;
+            chip->V[x] = chip->V[y] - chip->V[x];
             printf("Opcode (0x%X) called\n", chip->opcode);
             chip->PC += 2;
             break;
@@ -340,7 +345,7 @@ void emulateCycle(chip8 *chip) {
         break;
 
     case 0xB000: // BNNN: Jumps to the address NNN plus V0
-        chip->PC = chip->opcode & 0x0FFF + chip->V[0x0];
+        chip->PC = (chip->opcode & 0x0FFF) + chip->V[0x0];
         printf("Opcode (0x%X) called\n", chip->opcode);
         break;
 
@@ -394,16 +399,26 @@ void emulateCycle(chip8 *chip) {
     }
     case 0xE000:
         switch (chip->opcode & 0x000F) {
-        case 0x000E: // EX9E
-            printf("Opcode (0x%X) not implemented yet\n", chip->opcode);
-            chip->PC += 2;
+        case 0x000E: { // EX9E
+            /* Skip next instruction if key with the value of Vx is pressed. */
+            uint8_t x = (chip->opcode & 0x0F00) >> 8;
+            if (chip->key[chip->V[x]])
+                chip->PC += 4;
+            else
+                chip->PC += 2;
             break;
-
-        case 0x0001: // EXA1
-            printf("Opcode (0x%X) not implemented yet\n", chip->opcode);
-            chip->PC += 2;
+        }
+        case 0x0001: { // EXA1
+            /* Skip next instruction if key with the value of Vx is NOT pressed.
+             */
+            uint8_t x = (chip->opcode & 0x0F00) >> 8;
+            if (!chip->key[chip->V[x]])
+                chip->PC += 4;
+            else
+                chip->PC += 2;
+            printf("Opcode (0x%X) called\n", chip->opcode);
             break;
-
+        }
         default:
             printf("Unknown opcode [0xE000]: 0x%X\n", chip->opcode);
             chip->PC += 2;
@@ -413,28 +428,40 @@ void emulateCycle(chip8 *chip) {
     case 0xF000:
         switch (chip->opcode & 0x00FF) {
         case 0x0007: // FX07
-            printf("Opcode (0x%X) not implemented yet\n", chip->opcode);
+            /* The value of delay timer is placed into Vx*/
+            chip->V[(chip->opcode & 0x0F00) >> 8] = chip->delay_timer;
             chip->PC += 2;
+            printf("Opcode (0x%X) called\n", chip->opcode);
             break;
 
         case 0x000A: // FX0A
+            while (true) {
+                // TODO: Block all operations, except delay and sound timers
+                printf("waiting for keypress");
+            }
             printf("Opcode (0x%X) not implemented yet\n", chip->opcode);
             chip->PC += 2;
             break;
 
         case 0x0015: // FX15
-            printf("Opcode (0x%X) not implemented yet\n", chip->opcode);
+            /* Set delay timer to the value of Vx.*/
+            chip->delay_timer = chip->V[(chip->opcode & 0x0F00) >> 8];
             chip->PC += 2;
+            printf("Opcode (0x%X) called\n", chip->opcode);
             break;
 
         case 0x0018: // FX18
-            printf("Opcode (0x%X) not implemented yet\n", chip->opcode);
+            /* Set sound timer to the value of Vx.*/
+            chip->sound_timer = chip->V[(chip->opcode & 0x0F00) >> 8];
             chip->PC += 2;
+            printf("Opcode (0x%X) called\n", chip->opcode);
             break;
 
         case 0x001E: // FX1E
-            printf("Opcode (0x%X) not implemented yet\n", chip->opcode);
+            /* Set I = I + Vx */
+            chip->I += chip->V[(chip->opcode & 0x0F00) >> 8];
             chip->PC += 2;
+            printf("Opcode (0x%X) called\n", chip->opcode);
             break;
 
         case 0x0029: // FX29
@@ -468,21 +495,143 @@ void emulateCycle(chip8 *chip) {
         chip->PC += 2;
         break;
     }
+}
 
+void updateTimers(chip8 *chip) {
     if (chip->delay_timer > 0)
         chip->delay_timer--;
 
     if (chip->sound_timer > 0) {
-        if (chip->sound_timer == 1) {
+        if (chip->sound_timer == 1)
             printf("BEEP\n");
-        }
         chip->sound_timer--;
     }
 }
 
-void drawGrapics(chip8 *chip) {
+void drawGrapics(chip8 *chip, SDL_Renderer *renderer) {
     if (chip->draw_flag) {
-        // update screen
+        float scaleX = 800 / 64.0f;
+        float scaleY = 600 / 32.0f;
+        SDL_SetRenderDrawColor(renderer, 25, 25, 25, 255);
+        SDL_RenderClear(renderer);
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+        for (int i = 0; i < 64 * 32; i++) {
+            if (chip->gfx[i]) {
+                int col = i % 64;
+                int row = i / 64;
+                SDL_FRect rect = {col * scaleX, row * scaleY, scaleX, scaleY};
+                SDL_RenderFillRect(renderer, &rect);
+            }
+        }
         chip->draw_flag = 0;
+    }
+}
+
+void handleInput(chip8 *chip, SDL_Event *event) {
+    switch (event->type) {
+    case SDL_EVENT_KEY_DOWN:
+        switch (event->key.key) {
+        case SDLK_1:
+            chip->key[0x1] = true;
+            break;
+        case SDLK_2:
+            chip->key[0x2] = true;
+            break;
+        case SDLK_3:
+            chip->key[0x3] = true;
+            break;
+        case SDLK_4:
+            chip->key[0xC] = true;
+            break;
+        case SDLK_Q:
+            chip->key[0x4] = true;
+            break;
+        case SDLK_W:
+            chip->key[0x5] = true;
+            break;
+        case SDLK_E:
+            chip->key[0x6] = true;
+            break;
+        case SDLK_R:
+            chip->key[0xD] = true;
+            break;
+        case SDLK_A:
+            chip->key[0x7] = true;
+            break;
+        case SDLK_S:
+            chip->key[0x8] = true;
+            break;
+        case SDLK_D:
+            chip->key[0x9] = true;
+            break;
+        case SDLK_F:
+            chip->key[0xE] = true;
+            break;
+        case SDLK_Z:
+            chip->key[0xA] = true;
+            break;
+        case SDLK_X:
+            chip->key[0x0] = true;
+            break;
+        case SDLK_C:
+            chip->key[0xB] = true;
+            break;
+        case SDLK_V:
+            chip->key[0xF] = true;
+            break;
+        }
+        break;
+    case SDL_EVENT_KEY_UP:
+        switch (event->key.key) {
+        case SDLK_1:
+            chip->key[0x1] = false;
+            break;
+        case SDLK_2:
+            chip->key[0x2] = false;
+            break;
+        case SDLK_3:
+            chip->key[0x3] = false;
+            break;
+        case SDLK_4:
+            chip->key[0xC] = false;
+            break;
+        case SDLK_Q:
+            chip->key[0x4] = false;
+            break;
+        case SDLK_W:
+            chip->key[0x5] = false;
+            break;
+        case SDLK_E:
+            chip->key[0x6] = false;
+            break;
+        case SDLK_R:
+            chip->key[0xD] = false;
+            break;
+        case SDLK_A:
+            chip->key[0x7] = false;
+            break;
+        case SDLK_S:
+            chip->key[0x8] = false;
+            break;
+        case SDLK_D:
+            chip->key[0x9] = false;
+            break;
+        case SDLK_F:
+            chip->key[0xE] = false;
+            break;
+        case SDLK_Z:
+            chip->key[0xA] = false;
+            break;
+        case SDLK_X:
+            chip->key[0x0] = false;
+            break;
+        case SDLK_C:
+            chip->key[0xB] = false;
+            break;
+        case SDLK_V:
+            chip->key[0xF] = false;
+            break;
+        }
+        break;
     }
 }
