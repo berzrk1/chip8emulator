@@ -161,6 +161,7 @@ void emulateCycle(chip8 *chip) {
         increments the program counter by 2.
          */
         uint8_t x = (chip->opcode & 0x0F00) >> 8;
+        chip->PC += 2;
         if (chip->V[x] == (chip->opcode & 0x00FF))
             chip->PC += 2;
         printf("Opcode (0x%X) called\n", chip->opcode);
@@ -174,6 +175,7 @@ void emulateCycle(chip8 *chip) {
         increments the program counter by 2.
          */
         uint8_t x = (chip->opcode & 0x0F00) >> 8;
+        chip->PC += 2;
         if (chip->V[x] != (chip->opcode & 0x00FF))
             chip->PC += 2;
         printf("Opcode (0x%X) called\n", chip->opcode);
@@ -188,6 +190,7 @@ void emulateCycle(chip8 *chip) {
          */
         uint8_t x = (chip->opcode & 0x0F00) >> 8;
         uint8_t y = (chip->opcode & 0x00F0) >> 4;
+        chip->PC += 2;
         if (chip->V[x] == chip->V[y])
             chip->PC += 2;
         printf("Opcode (0x%X) called\n", chip->opcode);
@@ -352,6 +355,7 @@ void emulateCycle(chip8 *chip) {
     case 0x9000: { // 9XY0: Skips the next instruction if VX does not equal VY
         uint8_t x = (chip->opcode & 0x0F00) >> 8;
         uint8_t y = (chip->opcode & 0x00F0) >> 4;
+        chip->PC += 2;
         if (chip->V[x] != chip->V[y])
             chip->PC += 2;
         printf("Opcode (0x%X) called\n", chip->opcode);
