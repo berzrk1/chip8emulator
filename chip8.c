@@ -29,7 +29,7 @@ chip8 *initialize() {
     memset(chip->stack, 0, sizeof(chip->stack)); // Clear stack
     memset(chip->gfx, 0, sizeof(chip->gfx));     // Clear display
     memset(chip->V, 0, sizeof(chip->V));         // Clear registers
-    printf("Chip8 initialized");
+    printf("Chip8 initialized\n");
 
     // TODO: Load fonts
     // TODO: Reset timers
@@ -69,6 +69,11 @@ void cleanup(chip8 *chip) {
     free(chip);
 }
 
+static void display_clear(chip8 *chip) {
+    // Clears the screen
+    memset(chip->gfx, 0, sizeof(chip->gfx));
+}
+
 void emulateCycle(chip8 *chip) {
     // Simulate one cycle of the Chip 8
 
@@ -81,18 +86,23 @@ void emulateCycle(chip8 *chip) {
     // Decode Opcode
     // Read the first byte to get the opcode
     switch (chip->opcode & 0xF000) {
-        // TODO: Implement opcodes (1/35)
+        // TODO: Implement opcodes (16/35)
 
     case 0x0000:
         switch (chip->opcode & 0x000F) {
-        case 0x0000: // 00E0: Clear screen
-            printf("Opcode (0x%X) not implemented yet\n", chip->opcode);
+        case 0x0000: // 00E0: Clear the display
+            printf("Opcode (0x%X) called\n", chip->opcode);
+            display_clear(chip);
             chip->PC += 2;
             break;
 
         case 0x000E: // 00EE: Returns from a subroutine
-            printf("Opcode (0x%X) not implemented yet\n", chip->opcode);
-            chip->PC += 2;
+            /* Return from a subroutine.
+            The interpreter sets the program counter to the address at the top
+            of the stack, then subtracts 1 from the stack pointer.
+             */
+            chip->PC = chip->sp--;
+            printf("Opcode (0x%X) called\n", chip->opcode);
             break;
 
         default:
@@ -101,78 +111,211 @@ void emulateCycle(chip8 *chip) {
         }
         break;
     case 0x1000: // 1NNN: Jumps to address NNN
-        printf("Opcode (0x%X) not implemented yet\n", chip->opcode);
-        chip->PC += 2;
+        /* Jump to location nnn.
+        The interpreter sets the program counter to nnn.
+         */
+        chip->PC = chip->opcode & 0x0FFF;
+        printf("Opcode (0x%X) called\n", chip->opcode);
         break;
 
     case 0x2000: // 2NNNN: Calls subroutine at NNN
-        printf("Opcode (0x%X) not implemented yet\n", chip->opcode);
-        chip->PC += 2;
+        /* Call subroutine at nnn.
+        The interpreter increments the stack pointer, then puts the current PC
+        on the top of the stack. The PC is then set to nnn.*/
+        chip->stack[++chip->sp] = chip->PC;
+        chip->PC = chip->opcode & 0x0FFF;
+        printf("Opcode (0x%X) called\n", chip->opcode);
         break;
 
-    case 0x3000: // 3XNN: Skips the next instruction if VX equals NN
-        printf("Opcode (0x%X) not implemented yet\n", chip->opcode);
-        chip->PC += 2;
-        break;
+    case 0x3000: { // 3XKK
+        /* Skip next instruction if Vx = kk.
 
-    case 0x4000: // 4XNN: Skips the next instruction if VX does not equals NN
-        printf("Opcode (0x%X) not implemented yet\n", chip->opcode);
-        chip->PC += 2;
+        The interpreter compares register Vx to kk, and if they are equal,
+        increments the program counter by 2.
+         */
+        uint8_t x = (chip->opcode & 0x0F00) >> 8;
+        if (chip->V[x] == (chip->opcode & 0x00FF))
+            chip->PC += 2;
+        printf("Opcode (0x%X) called\n", chip->opcode);
         break;
+    }
 
-    case 0x5000: // 5XY0: Skips the next instruction if VX equals VY
-        printf("Opcode (0x%X) not implemented yet\n", chip->opcode);
-        chip->PC += 2;
-        break;
+    case 0x4000: { // 4XNN: Skips the next instruction if VX does not equals NN
+        /* Skip next instruction if Vx != kk.
 
-    case 0x6000: // 6XNN: Sets VX to NN
-        printf("Opcode (0x%X) not implemented yet\n", chip->opcode);
-        chip->PC += 2;
+        The interpreter compares register Vx to kk, and if they are not equal,
+        increments the program counter by 2.
+         */
+        uint8_t x = (chip->opcode & 0x0F00) >> 8;
+        if (chip->V[x] != (chip->opcode & 0x00FF))
+            chip->PC += 2;
+        printf("Opcode (0x%X) called\n", chip->opcode);
         break;
+    }
 
-    case 0x7000: // 7XNN: Adds NN to VX
-        printf("Opcode (0x%X) not implemented yet\n", chip->opcode);
-        chip->PC += 2;
+    case 0x5000: { // 5XY0
+        /* Skip next instruction if Vx = Vy.
+
+        The interpreter compares register Vx to register Vy, and if they are
+        equal, increments the program counter by 2
+         */
+        uint8_t x = (chip->opcode & 0x0F00) >> 8;
+        uint8_t y = chip->V[(chip->opcode & 0x00F0) >> 4];
+        if (chip->V[x] == chip->V[y])
+            chip->PC += 2;
+        printf("Opcode (0x%X) called\n", chip->opcode);
         break;
+    }
+
+    case 0x6000: { // 6XKK
+        /* Set Vx = kk.
+
+        The interpreter puts the value kk into register Vx.
+        */
+        uint8_t x = (chip->opcode & 0x0F00) >> 8;
+        chip->V[x] = chip->opcode & 0x00FF;
+        chip->PC += 2;
+        printf("Opcode (0x%X) called\n", chip->opcode);
+        break;
+    }
+
+    case 0x7000: { // 7XKK
+        /* Set Vx = Vx + kk.
+
+        Adds the value kk to the value of register Vx, then stores the result in
+        Vx.
+         */
+        uint8_t Vx = (chip->opcode & 0x0F00) >> 8;
+        chip->V[Vx] += chip->opcode & 0x00FF;
+        chip->PC += 2;
+        printf("Opcode (0x%X) called \n", chip->opcode);
+        break;
+    }
 
     case 0x8000:
         switch (chip->opcode & 0x000F) {
-        case 0x0000: // 8XY0: Sets VX to the value of VY
-            printf("Opcode (0x%X) not implemented yet\n", chip->opcode);
+        case 0x0000: { // 8XY0
+            /* Set Vx = Vy.
+
+            Stores the value of register Vy in register Vx
+             */
+            uint8_t x = (chip->opcode & 0x0F00) >> 8;
+            uint8_t y = (chip->opcode & 0x00F0) >> 4;
+            chip->V[x] = chip->V[y];
+            chip->PC += 2;
+            printf("Opcode (0x%X) called\n", chip->opcode);
+            break;
+        }
+        case 0x0001: { // 8xy1
+            /* Set Vx = Vx OR Vy.
+
+            Performs a bitwise OR on the values of Vx and Vy, then stores the
+            result in Vx.
+            */
+            uint8_t x = (chip->opcode & 0x0F00) >> 8;
+            uint8_t y = (chip->opcode & 0x00F0) >> 4;
+            chip->V[x] |= chip->V[y];
+            chip->PC += 2;
+            printf("Opcode (0x%X) called\n", chip->opcode);
+            break;
+        }
+        case 0x0002: { // 8xy2
+            /* Set Vx = Vx AND Vy.
+
+            Performs a bitwise AND on the values of Vx and Vy, then stores the
+            result in Vx.
+            */
+            uint8_t x = (chip->opcode & 0x0F00) >> 8;
+            uint8_t y = (chip->opcode & 0x00F0) >> 4;
+            chip->V[x] &= chip->V[y];
+            chip->PC += 2;
+            printf("Opcode (0x%X) called\n", chip->opcode);
+            break;
+        }
+        case 0x0003: { // 8xy3
+            /*Set Vx = Vx XOR Vy.
+
+            Performs a bitwise exclusive OR on the values of Vx and Vy, then
+            stores the result in Vx
+            */
+            uint8_t x = (chip->opcode & 0x0F00) >> 8;
+            uint8_t y = (chip->opcode & 0x00F0) >> 4;
+            chip->V[x] ^= chip->V[y];
+            chip->PC += 2;
+            printf("Opcode (0x%X) called\n", chip->opcode);
+            break;
+        }
+        case 0x0004: { // 8xy4
+            /* Set Vx = Vx + Vy, set VF = carry.
+
+            The values of Vx and Vy are added together. If the result is greater
+            than 8 bits (i.e., > 255,) VF is set to 1, otherwise 0.
+             */
+            uint8_t x = (chip->opcode & 0x0F00) >> 8;
+            uint8_t y = (chip->opcode & 0x00F0) >> 4;
+            uint16_t sum = chip->V[x] + chip->V[y];
+            chip->V[0xF] = (sum > 255) ? 1 : 0;
+            chip->V[x] = sum & 0xFF; // store the lowest 8 bit of the sum
+            chip->PC += 2;
+            printf("Opcode (0x%X) called\n", chip->opcode);
+            break;
+        }
+        case 0x0005: { // 8xy5
+            /*Set Vx = Vx - Vy, set VF = NOT borrow.
+
+            If Vx > Vy, then VF is set to 1, otherwise 0. Then Vy is subtracted
+            from Vx, and the results stored in Vx.
+             */
+            uint8_t x = (chip->opcode & 0x0F00) >> 8;
+            uint8_t y = (chip->opcode & 0x00F0) >> 4;
+            chip->V[0xF] = 0;
+
+            chip->V[0xF] = (chip->V[x] > chip->V[y]) ? 1 : 0;
+            chip->V[x] -= chip->V[y];
+            printf("Opcode (0x%X) called\n", chip->opcode);
             chip->PC += 2;
             break;
-        case 0x0001:
-            printf("Opcode (0x%X) not implemented yet\n", chip->opcode);
+        }
+        case 0x0006: { // 8xy6
+            /* Set Vx = Vx SHR 1.
+
+            If the least-significant bit of Vx is 1, then VF is set to 1,
+            otherwise 0. Then is Vx divided by 2.
+            */
+            uint8_t x = (chip->opcode & 0x0F00) >> 8;
+            chip->V[0xF] = chip->V[x] & 0x1; // LSB
+            chip->V[x] >>= 1;
+            chip->PC += 2;
+            printf("Opcode (0x%X) called\n", chip->opcode);
+            break;
+        }
+        case 0x0007: { // 8xy7
+            /* Set Vx = Vy - Vx, set VF = NOT borrow.
+
+            If Vy > Vx, then VF is set to 1, otherwise 0. Then Vx is subtracted
+            from Vy, and the results stored in Vx.
+             */
+            uint8_t x = (chip->opcode & 0x0F00) >> 8;
+            uint8_t y = (chip->opcode & 0x00F0) >> 4;
+            chip->V[x] = chip->V[y] - chip->V[x];
+            chip->V[0xF] = (chip->V[y] > chip->V[x]) ? 1 : 0;
+            printf("Opcode (0x%X) called\n", chip->opcode);
             chip->PC += 2;
             break;
-        case 0x0002:
-            printf("Opcode (0x%X) not implemented yet\n", chip->opcode);
+        }
+        case 0x000E: { // 8xyE
+            /* Set Vx = Vx SHL 1.
+
+            If the most-significant bit of Vx is 1, then VF is set to 1,
+            otherwise to 0. Then Vx is multiplied by 2.
+            */
+            uint8_t x = (chip->opcode & 0x0F00) >> 8;
+            chip->V[0xF] = (chip->V[x] & 0x80); // MSB
+            chip->V[x] <<= 1;
+            printf("Opcode (0x%X) called\n", chip->opcode);
             chip->PC += 2;
             break;
-        case 0x0003:
-            printf("Opcode (0x%X) not implemented yet\n", chip->opcode);
-            chip->PC += 2;
-            break;
-        case 0x0004:
-            printf("Opcode (0x%X) not implemented yet\n", chip->opcode);
-            chip->PC += 2;
-            break;
-        case 0x0005:
-            printf("Opcode (0x%X) not implemented yet\n", chip->opcode);
-            chip->PC += 2;
-            break;
-        case 0x0006:
-            printf("Opcode (0x%X) not implemented yet\n", chip->opcode);
-            chip->PC += 2;
-            break;
-        case 0x0007:
-            printf("Opcode (0x%X) not implemented yet\n", chip->opcode);
-            chip->PC += 2;
-            break;
-        case 0x000E:
-            printf("Opcode (0x%X) not implemented yet\n", chip->opcode);
-            chip->PC += 2;
-            break;
+        }
         default:
             printf("Unknown opcode [0x8000]: 0x%X\n", chip->opcode);
             chip->PC += 2;
