@@ -53,10 +53,8 @@ int main(int argc, char **argv) {
             }
         }
 
-        // ~500Hz CPU / 60Hz display = ~8 cycles per frame
-        for (int i = 0; i < 9; i++) {
+        for (int i = 0; i < 16; i++)
             emulateCycle(chip);
-        }
         updateTimers(chip);
 
         drawGrapics(chip, renderer);

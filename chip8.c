@@ -113,12 +113,11 @@ void emulateCycle(chip8 *chip) {
     // Decode Opcode
     // Read the first byte to get the opcode
     switch (chip->opcode & 0xF000) {
-        // TODO: Implement opcodes (24/35)
-
     case 0x0000:
         switch (chip->opcode & 0x000F) {
         case 0x0000: // 00E0: Clear the display
             display_clear(chip);
+            chip->draw_flag = 1;
             chip->PC += 2;
             printf("Opcode (0x%X) called\n", chip->opcode);
             break;
