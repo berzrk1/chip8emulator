@@ -24,6 +24,25 @@ struct Chip8 {
     uint8_t sound_timer;
 };
 
+uint8_t fontset[80] = {
+    0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
+    0x20, 0x60, 0x20, 0x20, 0x70, // 1
+    0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
+    0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
+    0x90, 0x90, 0xF0, 0x10, 0x10, // 4
+    0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
+    0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
+    0xF0, 0x10, 0x20, 0x40, 0x40, // 7
+    0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
+    0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
+    0xF0, 0x90, 0xF0, 0x90, 0x90, // A
+    0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
+    0xF0, 0x80, 0x80, 0x80, 0xF0, // C
+    0xE0, 0x90, 0x90, 0x90, 0xE0, // D
+    0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
+    0xF0, 0x80, 0xF0, 0x80, 0x80  // F
+};
+
 chip8 *initialize() {
     // Initialize registers and memory once
     chip8 *chip = malloc(sizeof(chip8));
@@ -39,7 +58,7 @@ chip8 *initialize() {
     printf("Chip8 initialized\n");
 
     srand(time(NULL));
-    // TODO: Load fonts
+    memcpy(chip->memory, fontset, sizeof(fontset));
     // TODO: Reset timers
     return chip;
 }
@@ -464,26 +483,45 @@ void emulateCycle(chip8 *chip) {
             printf("Opcode (0x%X) called\n", chip->opcode);
             break;
 
-        case 0x0029: // FX29
-            printf("Opcode (0x%X) not implemented yet\n", chip->opcode);
+        case 0x0029: { // Fx29
+            // Set I = location of Sprite for digit Vx
+            uint8_t x = (chip->opcode & 0x0F00) >> 8;
+            // font memory starts at 0x0, each font is 5 pixels tall
+            chip->I = 0x0 + chip->V[x] * 5;
             chip->PC += 2;
+            printf("Opcode (0x%X) called\n", chip->opcode);
             break;
-
+        }
         case 0x0033: // FX33
-            printf("Opcode (0x%X) not implemented yet\n", chip->opcode);
+            /* Store BCD representation of Vx in memory locations I, I+1, and
+              I+2.
+
+             Me: No idea what that means.
+              */
+            chip->memory[chip->I] = chip->V[(chip->opcode & 0x0F00) >> 8] / 100;
+            chip->memory[chip->I + 1] =
+                (chip->V[(chip->opcode & 0x0F00) >> 8] / 10) % 10;
+            chip->memory[chip->I + 2] =
+                (chip->V[(chip->opcode & 0x0F00) >> 8] % 100) % 10;
             chip->PC += 2;
+            printf("Opcode (0x%X) called\n", chip->opcode);
             break;
 
-        case 0x0055: // FX55
-            printf("Opcode (0x%X) not implemented yet\n", chip->opcode);
+        case 0x0055: { // FX55
+            /*Store registers V0 through Vx in memory starting at location I. */
+            uint8_t x = (chip->opcode & 0x0F00) >> 8;
+            memcpy(chip->memory + chip->I, chip->V, x + 1);
             chip->PC += 2;
             break;
-
-        case 0x0065: // FX65
-            printf("Opcode (0x%X) not implemented yet\n", chip->opcode);
+        }
+        case 0x0065: { // FX65
+            /*Read registers V0 through Vx from memory starting at location I.*/
+            uint8_t x = (chip->opcode & 0x0F00) >> 8;
+            memcpy(chip->V, chip->memory + chip->I, x + 1);
             chip->PC += 2;
+            printf("Opcode (0x%X) called\n", chip->opcode);
             break;
-
+        }
         default:
             printf("Unknown opcode [0xF000]: 0x%X\n", chip->opcode);
             chip->PC += 2;
